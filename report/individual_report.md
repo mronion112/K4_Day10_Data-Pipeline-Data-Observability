@@ -1,164 +1,108 @@
-# Member Role Report — Day 10: Data Pipeline & Data Observability
-
-> Mỗi thành viên trong nhóm tự hoàn thành mẫu này để báo cáo đúng vai trò, phần việc và mức hiểu của mình. Không sao chép nguyên báo cáo chung hoặc báo cáo của thành viên khác. Thay nội dung trong dấu `[ ]` và xóa các dòng hướng dẫn không cần thiết trước khi nộp.
+# Báo cáo cá nhân — Day 10: Data Pipeline & Data Observability
 
 ## 1. Thông tin cá nhân
 
-| Thông tin         | Nội dung                  |
-| ------------------ | -------------------------- |
-| Họ và tên       | [Họ và tên]             |
-| MSSV               | [MSSV]                     |
-| Khóa/Lớp         | [K3 hoặc K4]              |
-| Tên nhóm         | [Tên hoặc mã nhóm]     |
-| Vai trò chính    | [Vai trò]                 |
-| Repository         | [Đường dẫn repository] |
-| Ngày hoàn thành | [YYYY-MM-DD]               |
+| Thông tin | Nội dung |
+| --- | --- |
+| Họ và tên | Đào Kiều Thịnh Quang |
+| MSSV | 2A202601014 |
+| Khóa/Lớp | K4 |
+| Vai trò | Thành viên 5 — Integration & Comparison |
 
-## 2. Vai trò và phạm vi công việc
+## 2. Phạm vi công việc
 
-### Phần việc sở hữu
+Tôi phụ trách ghép các module đã có thành hai luồng chạy hoàn chỉnh và tạo bằng chứng so sánh ba trạng thái dữ liệu. Phần sở hữu là:
 
-| Module/deliverable | File/hàm phụ trách | Input nhận vào | Output bàn giao  | Trạng thái                                 |
-| ------------------ | --------------------- | ---------------- | ----------------- | -------------------------------------------- |
-| [Phần việc]      | [File/hàm]           | [Input]          | [Output/artifact] | [Hoàn thành/Một phần/Chưa hoàn thành] |
-| [Phần việc]      | [File/hàm]           | [Input]          | [Output/artifact] | [Hoàn thành/Một phần/Chưa hoàn thành] |
+| Module/deliverable | File/hàm phụ trách | Input | Output |
+| --- | --- | --- | --- |
+| Baseline orchestration | `src/pipelines/phase1.py::main` | Crossref raw records hoặc API, cấu hình, test set | Clean data, Chroma index, baseline metrics, quality/freshness và baseline report |
+| Corruption/repair orchestration | `src/pipelines/corruption_flow.py::main` | Baseline artifacts, frozen test set, raw-record snapshot | Corrupted/repaired data, metrics, quality reports và comparison report |
+| Agent demo integration | `script/run_agent_demo.py` | Baseline index, frozen test set, OpenAI configuration | Ba câu trả lời từ LLM agent thật tại `data/results/agent_demo_answers.json` |
 
-Chỉ nhận ownership cho phần bạn trực tiếp thực hiện. Liên hệ rõ phần việc của bạn với đầu vào, đầu ra và các thành viên phụ thuộc vào phần đó.
+## 3. Cách tích hợp end-to-end
 
-### Việc hỗ trợ ngoài phạm vi chính
+### Baseline pipeline
 
-| Hoạt động                         | Thành viên/module được hỗ trợ | Kết quả                    |
-| ------------------------------------ | ------------------------------------ | ---------------------------- |
-| [Debug/tích hợp/tài liệu] | [Tên hoặc module] | [Kết quả và bằng chứng] |
+`phase1.py` tải settings, dùng raw snapshot nếu đã tồn tại hoặc gọi Crossref API nếu chưa có. Sau đó pipeline làm sạch records, lưu CSV/JSON, build ChromaDB index, tạo frozen evaluation set khi cần và chạy evaluator. Cuối cùng pipeline chạy quality checks, freshness monitoring và sinh `data/reports/phase1_report.md`.
 
-## 3. Kết quả theo vai trò
-
-| Nhiệm vụ đã thực hiện | File/hàm/artifact liên quan | Kết quả bàn giao       | Cách xác minh         |
-| --------------------------- | ----------------------------- | ------------------------- | ----------------------- |
-| [Mô tả cụ thể] | [Đường dẫn file] | [Artifact/metrics/report] | [Lệnh/artifact] |
-| [Mô tả cụ thể] | [Đường dẫn file] | [Artifact/metrics/report] | [Lệnh/artifact] |
-
-Nêu một output cụ thể mà phần việc của bạn tạo ra hoặc giúp xác minh:
-
-[Mô tả artifact, metric, report hoặc kết quả tích hợp.]
-
-## 4. Giải thích phần kỹ thuật đã thực hiện
-
-### Vấn đề cần giải quyết
-
-[Phần của bạn giải quyết vấn đề gì trong pipeline?]
-
-### Cách triển khai
-
-[Mô tả thuật toán, quy tắc dữ liệu, orchestration hoặc quyết định chính. Không chỉ chép lại tên hàm.]
-
-### Input, output và contract
-
-| Thành phần                   | Mô tả                                     |
-| ------------------------------ | ------------------------------------------- |
-| Input                          | [Schema, artifact hoặc tham số]           |
-| Output                         | [Schema, artifact hoặc giá trị trả về] |
-| Module phụ thuộc             | [Module/file liên quan]                    |
-| Module sử dụng output        | [Module/file liên quan]                    |
-| Điều kiện lỗi cần xử lý | [Trường hợp thực tế]                   |
-
-### Cách xác minh
+Lệnh tái hiện:
 
 ```bash
-[Ghi lệnh thực tế đã chạy]
+uv run python script/run_phase1.py
 ```
 
-- **Kết quả mong đợi:** [Mô tả.]
-- **Kết quả thực tế:** [Mô tả.]
-- **Artifact/log:** [Đường dẫn; không chứa secret.]
+### Corruption, repair và comparison
 
-## 5. Một quyết định kỹ thuật quan trọng
+`corruption_flow.py` không tạo test set mới. Nó đọc chính frozen set từ `data/eval/test_set.json`, tạo corruption có kiểm soát, re-index và đánh giá corrupted state. Repair được thực hiện bằng cách làm sạch lại `data/raw/crossref_records.json`, thay vì vá trực tiếp dữ liệu lỗi. Dataset repaired tiếp tục được re-index, đánh giá trên cùng frozen set, rồi xuất comparison report.
 
-- **Bối cảnh:** [Vấn đề hoặc lựa chọn cần quyết định.]
-- **Các phương án đã cân nhắc:** [Ít nhất hai phương án.]
-- **Phương án đã chọn:** [Lựa chọn.]
-- **Lý do:** [Trade-off về correctness, data quality, reproducibility, cost hoặc độ phức tạp.]
-- **Bằng chứng quyết định phù hợp:** [Metric, artifact hoặc kết quả thử nghiệm.]
+```bash
+uv run python script/run_corruption_flow.py
+```
 
-## 6. Một lỗi hoặc blocker đã xử lý
+### Demo agent thật
 
-- **Triệu chứng/lỗi nguyên văn:** [Che toàn bộ secret trước khi ghi.]
-- **Lệnh hoặc bước tái hiện:** [Lệnh/bước.]
-- **Nguyên nhân gốc:** [Root cause, không chỉ mô tả triệu chứng.]
-- **Cách xử lý:** [Thay đổi cụ thể.]
-- **Cách xác minh sau khi sửa:** [Lệnh và kết quả.]
-- **Điều học được:** [Bài học kỹ thuật.]
+Sau khi cấu hình `LLM_PROVIDER=openai`, `LLM_MODEL=gpt-5.6-luna` và `OPENAI_API_KEY` trong `.env`, chạy:
 
-Nếu chưa xử lý xong:
+```bash
+uv run python script/run_agent_demo.py
+```
 
-- **Phạm vi bị ảnh hưởng:** [Module/artifact.]
-- **Những gì đã loại trừ:** [Các giả thuyết đã kiểm tra.]
-- **Bước tiếp theo:** [Hành động có thể kiểm chứng.]
+Agent đã gọi semantic-search/lookup trên index cục bộ và trả lời đúng ngày xuất bản của bài JADE-Plus là **2026-07-13**. Artifact demo nằm tại `data/results/agent_demo_answers.json`.
 
-## 7. Hiểu biết về luồng end-to-end
+## 4. Kết quả và bằng chứng
 
-Giải thích ngắn gọn bằng lời của bạn:
+### Artifact đã tạo
 
-1. Dữ liệu đi từ Crossref đến vector index như thế nào?
-2. Evaluation set và ground-truth document IDs dùng để đo retrieval/answer quality ra sao?
-3. Quality checks khác freshness monitoring ở điểm nào trong bài lab?
-4. Vì sao phải dùng cùng test set cho baseline, corrupted và repaired?
-5. Repair được xem là thành công dựa trên artifact và metric nào?
+| Artifact | Đường dẫn | Kết quả |
+| --- | --- | --- |
+| Raw response và parsed records | `data/raw/` | 24 records Crossref |
+| Clean baseline data | `data/clean/papers_clean.csv` | 24 records sạch |
+| Frozen evaluation set | `data/eval/test_set.json` | 12 câu hỏi factual |
+| Baseline metrics | `data/results/baseline_metrics.json` | Đã tạo |
+| Corruption log | `data/results/corruption_log.json` | 6 sự kiện corruption được ghi lại |
+| Corrupted/repaired metrics | `data/results/*_metrics.json` | Đã tạo |
+| Baseline/comparison reports | `data/reports/` | Đã tạo |
 
-**Câu trả lời:**
+### So sánh ba trạng thái
 
-[Viết câu trả lời tại đây.]
+| Metric/signal | Baseline | Corrupted | Repaired | Nhận xét |
+| --- | ---: | ---: | ---: | --- |
+| `retrieval_hit_rate` | 1.00 | 1.00 | 1.00 | Top-4 retrieval vẫn chứa document đúng. |
+| `mean_token_f1` | 1.00 | 0.75 | 1.00 | Summary rỗng làm giảm độ khớp câu trả lời 0.25. |
+| `judge_accuracy` | 1.00 | 0.75 | 1.00 | Ba câu hỏi summary của document bị tác động không còn đúng. |
+| `mean_judge_score` | 5.00 | 4.00 | 5.00 | Repair phục hồi hoàn toàn mức baseline. |
+| Quality checks | PASS | FAIL | PASS | Corrupted có duplicate ID và 4 summary ngắn/rỗng. |
+| Freshness | FRESH | STALE | FRESH | Corrupted có 1 record bị đổi ngày về `2000-01-01`. |
 
-## 8. Phân tích kết quả
+## 5. Phân tích nguyên nhân–kết quả
 
-### Metrics chính
+1. Ba documents thuộc frozen test set bị làm rỗng `summary`; đồng thời một bản duplicate được thêm vào và một ngày xuất bản bị làm cũ. Vì vậy quality report chuyển từ PASS sang FAIL, freshness chuyển từ FRESH sang STALE. Retrieval hit rate không giảm do document vẫn tồn tại trong top-k, nhưng thiếu nội dung khiến `mean_token_f1` và `judge_accuracy` giảm từ 1.00 xuống 0.75.
+2. Repair bắt đầu từ raw-record snapshot tin cậy, chạy lại cleaning chuẩn và rebuild index. Điều này loại bỏ duplicate, khôi phục summary/date gốc và đưa quality/freshness về PASS/FRESH. `mean_token_f1`, `judge_accuracy` và `mean_judge_score` trở lại đúng baseline.
 
-| Metric/signal          | Baseline | Corrupted | Repaired | Nhận xét của cá nhân |
-| ---------------------- | -------: | --------: | -------: | ------------------------- |
-| `retrieval_hit_rate` |      [ ] |       [ ] |      [ ] | [Nhận xét]              |
-| `mean_token_f1`      |      [ ] |       [ ] |      [ ] | [Nhận xét]              |
-| `judge_accuracy`     |      [ ] |       [ ] |      [ ] | [Nhận xét]              |
-| `mean_judge_score`   |      [ ] |       [ ] |      [ ] | [Nhận xét]              |
-| Quality checks         |      [ ] |       [ ] |      [ ] | [Nhận xét]              |
-| Freshness status       |      [ ] |       [ ] |      [ ] | [Nhận xét]              |
+Việc giữ nguyên 12 câu hỏi và `ground_truth_doc_ids` cho cả ba lần chạy là điều kiện cần để khác biệt metric phản ánh trạng thái dữ liệu/index, không phải thay đổi bộ câu hỏi.
 
-### Kết luận từ số liệu
+## 6. Quyết định kỹ thuật quan trọng
 
-Hoàn thành hai chuỗi nguyên nhân–bằng chứng sau:
+- **Vấn đề:** Repair dữ liệu lỗi bằng cách nào để kết quả có thể kiểm chứng?
+- **Phương án không chọn:** Sửa trực tiếp `papers_clean_corrupted.csv`. Cách này có thể che lỗi, không đảm bảo phục hồi đúng giá trị nguồn và khó audit.
+- **Phương án đã chọn:** Đọc lại `data/raw/crossref_records.json`, chạy `build_clean_dataframe`, sau đó rebuild index và đánh giá lại.
+- **Lý do:** Raw artifact là snapshot có thể truy vết; cùng logic cleaning tạo output nhất quán và cho phép tái hiện repair.
+- **Bằng chứng:** Repaired state có 24 rows, quality PASS, freshness FRESH và tất cả metrics quay lại mức baseline.
 
-1. [Data corruption] → [quality/freshness signal thay đổi] → [agent metric thay đổi].
-2. [Repair action] → [quality/freshness signal phục hồi] → [agent metric phục hồi hoặc chưa phục hồi].
+## 7. Lỗi tích hợp đã xử lý
 
-Corruption nào ảnh hưởng rõ nhất và vì sao?
+- **Triệu chứng:** Demo OpenAI agent trả lỗi HTTP 400: GPT-5.6-luna không hỗ trợ function tools trên Chat Completions khi reasoning effort đang bật.
+- **Nguyên nhân:** `LangChain` agent dùng function tools qua Chat Completions, trong khi model yêu cầu dùng Responses API hoặc đặt reasoning effort thành `none` cho route này.
+- **Cách xử lý:** Trong `src/retrieval/llm.py`, cấu hình `reasoning_effort="none"` cho model bắt đầu bằng `gpt-5.6`. Đồng thời bổ sung `published`, authors và categories vào output của hai tool trong `src/retrieval/agent.py` để LLM có metadata chính xác.
+- **Xác minh:** `uv run python script/run_agent_demo.py` chạy thành công, sinh artifact demo và trả lời ngày xuất bản chính xác.
 
-[Phân tích dựa trên số liệu.]
+## 8. Kết luận cá nhân
 
-Kết quả nào khác với kỳ vọng ban đầu?
+Phần integration chứng minh pipeline không chỉ chạy độc lập từng module mà còn tạo được chuỗi artifacts nhất quán: raw → clean → index → evaluate → observe → corrupt → repair → compare. Kết quả cho thấy retrieval hit rate một mình chưa đủ để kết luận chất lượng hệ thống: context bị mất vẫn làm câu trả lời factual giảm chất lượng dù document đúng còn được retrieve. Quality checks và frozen evaluation set giúp phát hiện, định lượng và xác minh sự phục hồi sau repair một cách tái hiện được.
 
-[Nêu kết quả, giả thuyết và cách đã kiểm tra.]
+## 9. Tự kiểm tra
 
-## 9. Điều học được và hướng cải thiện
-
-### Ba điều quan trọng nhất
-
-1. [Điều học được về data pipeline.]
-2. [Điều học được về data quality/observability.]
-3. [Điều học được về ảnh hưởng của data đến RAG agent.]
-
-### Nếu có thêm thời gian
-
-[Nêu một cải thiện cụ thể, lý do và cách đo cải thiện đó.]
-
-## 10. Cam kết của thành viên
-
-Đánh dấu sau khi tự kiểm tra:
-
-- [ ] Nội dung báo cáo phản ánh đúng phần việc và mức hiểu của tôi.
-- [ ] Tôi có thể giải thích luồng end-to-end, không chỉ module mình phụ trách.
-- [ ] Mọi kết luận về kết quả đều có artifact hoặc metric để đối chiếu.
-- [ ] Tôi không ghi “đã chạy thành công” cho phần chưa được kiểm chứng.
-- [ ] Báo cáo không chứa `.env`, API key, token hoặc secret.
-- [ ] Báo cáo này không phải bản sao nguyên văn của báo cáo nhóm hoặc báo cáo thành viên khác.
-
-**Họ và tên:** [Họ và tên]
-**Ngày xác nhận:** [YYYY-MM-DD]
+- [x] Báo cáo chỉ mô tả phạm vi Integration & Comparison được phân công.
+- [x] Các metric khớp với files trong `data/results/`.
+- [x] Các kết luận quality/freshness khớp với files trong `data/quality/`.
+- [x] Không chứa `.env`, API key hoặc secret.
