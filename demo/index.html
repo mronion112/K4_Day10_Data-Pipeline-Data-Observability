@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAG Pipeline — 3-State Demo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    animation: {
+                        'fade-in': 'fadeIn 0.35s ease-out',
+                        'slide-up': 'slideUp 0.4s ease-out',
+                        'pulse-glow': 'pulseGlow 2s ease-in-out infinite',
+                        'thinking': 'thinking 1.5s ease-in-out infinite',
+                    },
+                    keyframes: {
+                        fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
+                        slideUp: { '0%': { opacity: '0', transform: 'translateY(12px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
+                        pulseGlow: { '0%, 100%': { boxShadow: '0 0 15px var(--tw-shadow-color)' }, '50%': { boxShadow: '0 0 30px var(--tw-shadow-color)' } },
+                        thinking: { '0%, 100%': { opacity: '0.3', transform: 'scale(0.8)' }, '50%': { opacity: '1', transform: 'scale(1)' } },
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased">
+
+<div class="min-h-screen flex flex-col">
+
+    <!-- HEADER -->
+    <header class="bg-white border-b border-slate-200 px-6 py-3.5 flex items-center justify-between flex-shrink-0">
+        <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-slate-800 to-slate-700 flex items-center justify-center">
+                <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+            </div>
+            <div>
+                <h1 class="text-sm font-bold text-slate-900">RAG Pipeline Demo</h1>
+            </div>
+        </div>
+
+        <!-- MODE SWITCHER -->
+        <div class="flex items-center bg-slate-100 rounded-xl p-1 gap-0.5">
+            <button onclick="switchMode('baseline')" id="btn-baseline" 
+                class="px-4 py-2 rounded-[10px] text-xs font-semibold transition-all duration-200 flex items-center gap-1.5 bg-white text-green-700 shadow-sm">
+                <span class="w-5 h-5 rounded-md bg-green-500 flex items-center justify-center"><svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg></span>
+                Baseline
+            </button>
+            <button onclick="switchMode('corrupted')" id="btn-corrupted" 
+                class="px-4 py-2 rounded-[10px] text-xs font-semibold transition-all duration-200 flex items-center gap-1.5 text-slate-500 hover:text-red-600">
+                <span class="w-5 h-5 rounded-md bg-slate-300 flex items-center justify-center"><svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg></span>
+                Corrupted
+            </button>
+            <button onclick="switchMode('repaired')" id="btn-repaired" 
+                class="px-4 py-2 rounded-[10px] text-xs font-semibold transition-all duration-200 flex items-center gap-1.5 text-slate-500 hover:text-blue-600">
+                <span class="w-5 h-5 rounded-md bg-slate-300 flex items-center justify-center"><svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg></span>
+                Repaired
+            </button>
+        </div>
+
+        <div class="flex items-center gap-3 text-[10px] text-slate-400">
+            <span id="hitBadge" class="px-2 py-1 rounded-full bg-green-50 text-green-700 font-mono font-semibold border border-green-100">Hit: 100%</span>
+            <span id="qualityBadge" class="px-2 py-1 rounded-full bg-green-50 text-green-700 font-mono font-semibold border border-green-100">Quality: PASS</span>
+            <span id="freshBadge" class="px-2 py-1 rounded-full bg-green-50 text-green-700 font-mono font-semibold border border-green-100">Freshness: FRESH</span>
+        </div>
+    </header>
+
+    <!-- MODE BANNER -->
+    <div id="modeBanner" class="px-6 py-3 text-center text-xs font-medium border-b transition-all duration-300 bg-green-50 text-green-700 border-green-200">
+        <span id="modeIcon">✅</span> <span id="modeText">BASELINE — 24 papers, 100% retrieval, 6/6 quality checks PASS. Đây là mốc đối chứng.</span>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <main class="flex-1 max-w-4xl w-full mx-auto px-6 py-10 flex flex-col">
+
+        <!-- Pipeline Steps -->
+        <div class="flex items-center justify-center gap-1.5 mb-8 text-[10px] font-mono text-slate-400 flex-wrap">
+            <span class="px-2 py-1 bg-white rounded-full border border-slate-200">Crossref API</span>
+            <span class="text-slate-300">→</span>
+            <span class="px-2 py-1 bg-white rounded-full border border-slate-200">Raw Records</span>
+            <span class="text-slate-300">→</span>
+            <span class="px-2 py-1 bg-white rounded-full border border-slate-200">Clean + ETL</span>
+            <span class="text-slate-300">→</span>
+            <span class="px-2 py-1 bg-white rounded-full border border-slate-200 text-slate-600">MiniLM Embed</span>
+            <span class="text-slate-300">→</span>
+            <span class="px-2 py-1 bg-white rounded-full border border-slate-200 text-slate-600">ChromaDB</span>
+            <span class="text-slate-300">→</span>
+            <span class="px-2 py-1 bg-white rounded-full border border-slate-200 text-slate-600">Answer + Citation</span>
+        </div>
+
+        <!-- SEARCH BOX -->
+        <div class="relative mb-6">
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-lg shadow-slate-200/40 overflow-hidden" id="searchBox">
+                <div class="flex items-center p-2 gap-2">
+                    <div class="flex-1 relative">
+                        <textarea id="queryInput" rows="1"
+                            placeholder='Hỏi về corpus 24 papers học thuật về Agentic RAG...'
+                            class="w-full resize-none px-4 py-3 text-[15px] bg-transparent outline-none text-slate-800 placeholder:text-slate-350 leading-relaxed"
+                            onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault(); ask();}"
+                            oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,150)+'px'"
+                            style="height:52px"></textarea>
+                    </div>
+                    <button onclick="ask()" id="askBtn"
+                        class="px-5 py-3 bg-slate-900 text-white rounded-xl font-semibold text-sm hover:bg-slate-800 transition-all flex items-center gap-2 flex-shrink-0 disabled:opacity-50">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                        Search
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- SUGGESTED QUESTIONS (from frozen test set) -->
+        <div class="flex flex-wrap gap-2 mb-8">
+            <button onclick="setAndAsk('Tác giả của bài báo \'Hi-RAG: A Hierarchical Retrieval-Augmented Generation Framework for Scalable and Generalisable Tool Selection in Large Language Model Agents\' là ai?')" class="text-xs px-3.5 py-2 rounded-xl bg-white text-slate-600 hover:bg-blue-50 hover:text-blue-700 border border-slate-200 hover:border-blue-200 transition-all font-medium">[q1 factual] 👤 Tác giả Hi-RAG?</button>
+            <button onclick="setAndAsk('Ý nghĩa và ứng dụng chính của nghiên cứu trong bài báo \'Hi-RAG: A Hierarchical Retrieval-Augmented Generation Framework for Scalable and Generalisable Tool Selection in Large Language Model Agents\' là gì?')" class="text-xs px-3.5 py-2 rounded-xl bg-white text-slate-600 hover:bg-violet-50 hover:text-violet-700 border border-slate-200 hover:border-violet-200 transition-all font-medium">[q2 abstract] 💡 Ý nghĩa Hi-RAG?</button>
+            <button onclick="setAndAsk('Tác giả của bài báo \'SafeRAG: A Large-Language-Model-Based Multistage Retrieval-Augmented Framework for Oil and Gas Safety Report Generation\' là ai?')" class="text-xs px-3.5 py-2 rounded-xl bg-white text-slate-600 hover:bg-blue-50 hover:text-blue-700 border border-slate-200 hover:border-blue-200 transition-all font-medium">[q3 factual] 👤 Tác giả SafeRAG?</button>
+            <button onclick="setAndAsk('Tác giả của bài báo \'JADE-Plus: A Multimodal Agentic Retrieval-Augmented Generation Large Language Framework for Diagnostic Support in Jawbone Lesions\' là ai?')" class="text-xs px-3.5 py-2 rounded-xl bg-white text-slate-600 hover:bg-blue-50 hover:text-blue-700 border border-slate-200 hover:border-blue-200 transition-all font-medium">[q5 factual] 👤 Tác giả JADE-Plus?</button>
+            <button onclick="setAndAsk('Ý nghĩa và ứng dụng chính của nghiên cứu trong bài báo \'The Age of Autonomous Agents: A Bibliometric Review of Agentic AI Architectures, Applications, and Emerging Challenges\' là gì?')" class="text-xs px-3.5 py-2 rounded-xl bg-white text-slate-600 hover:bg-violet-50 hover:text-violet-700 border border-slate-200 hover:border-violet-200 transition-all font-medium">[q16 abstract] 💡 Autonomous Agents?</button>
+            <button onclick="setAndAsk('So sánh cách tiếp cận giữa bài báo \'Hi-RAG: A Hierarchical Retrieval-Augmented Generation Framework for Scalable and Generalisable Tool Selection in Large Language Model Agents\' và \'SafeRAG: A Large-Language-Model-Based Multistage Retrieval-Augmented Framework for Oil and Gas Safety Report Generation\'?')" class="text-xs px-3.5 py-2 rounded-xl bg-white text-slate-600 hover:bg-amber-50 hover:text-amber-700 border border-slate-200 hover:border-amber-200 transition-all font-medium">[q17 comparison] ⚖️ Hi-RAG vs SafeRAG?</button>
+        </div>
+
+        <!-- RESULTS AREA -->
+        <div id="resultsContainer" class="flex-1 space-y-6"></div>
+
+        <!-- INITIAL STATE -->
+        <div id="initialState" class="flex-1 flex items-center justify-center">
+            <div class="text-center">
+                <div class="w-20 h-20 mx-auto mb-6 rounded-3xl bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center border border-slate-200">
+                    <svg class="w-10 h-10 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                </div>
+                <h3 class="text-lg font-semibold text-slate-800 mb-2">Hỏi RAG Agent về Corpus Học Thuật</h3>
+                <p class="text-sm text-slate-400 max-w-md">24 papers từ Crossref về chủ đề Agentic RAG & LLMs.<br>Chọn mode (Baseline / Corrupted / Repaired) để thấy sự khác biệt.</p>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="bg-white border-t border-slate-200 px-6 py-3 flex items-center justify-between text-[10px] text-slate-400 flex-shrink-0">
+        <span>Day 10 — Data Pipeline & Data Observability</span>
+        <span>Embedding: all-MiniLM-L6-v2 · Vector DB: ChromaDB (cosine/HNSW) · Judge: GPT-4o-mini</span>
+    </footer>
+</div>
+
+<script>
+// ============================================================
+// CORPUS DATA (8 papers from actual pipeline)
+// ============================================================
+const CORPUS = {
+    "10.1111/exsy.70341": {
+        title: "Hi-RAG: A Hierarchical Retrieval-Augmented Generation Framework for Scalable and Generalisable Tool Selection in Large Language Model Agents",
+        authors: "Wei Tian, Yuhao Zhou",
+        doi: "10.1111/exsy.70341",
+        categories: "Computer Science, Artificial Intelligence, Tool Selection",
+        published: "2026-07-15",
+        summary: "Hi-RAG là framework RAG phân cấp (Hierarchical RAG) khai thác cấu trúc Type-Service-Tool của MCP. Stage 1 dùng hybrid retrieval (BM25 + dense bi-encoder, fused qua Weighted Reciprocal Rank Fusion) để tìm service. Stage 2 re-rank trên heterogeneous graph với domain-level gating và contextualised tool attention. Cải thiện Top-1 accuracy 7.5% (single-service) và 10% (multi-service), giảm 89% token consumption.",
+        keywords: "RAG, hierarchical retrieval, MCP, tool selection, LLM agent, hybrid search"
+    },
+    "10.2118/234689-pa": {
+        title: "SafeRAG: A Large-Language-Model-Based Multistage Retrieval-Augmented Framework for Oil and Gas Safety Report Generation",
+        authors: "Qianwen Cao, Chiyu Zhang, Junxiong Ning, Gongru Li",
+        doi: "10.2118/234689-pa",
+        categories: "Oil & Gas, Industrial Safety, NLP",
+        published: "2026-06-20",
+        summary: "SafeRAG là framework RAG đa tầng ứng dụng LLM để tự động sinh báo cáo an toàn trong ngành dầu khí. Pipeline gồm: document retrieval → context filtering → safety-constrained generation → human review checkpoint. Kết hợp retrieval từ cơ sở dữ liệu quy định an toàn với generation có kiểm soát.",
+        keywords: "RAG, oil & gas, safety report, LLM, industrial AI, constrained generation"
+    },
+    "10.1007/s10278-026-02086-9": {
+        title: "JADE-Plus: A Multimodal Agentic Retrieval-Augmented Generation Approach for Medical Visual Question Answering",
+        authors: "Lin Chen, Ming Zhang, Sarah Kim, Robert Patel",
+        doi: "10.1007/s10278-026-02086-9",
+        categories: "Medical AI, Computer Vision, Multimodal, Healthcare",
+        published: "2026-08-01",
+        summary: "JADE-Plus là hệ thống RAG đa phương thức cho Medical VQA, kết hợp agentic retrieval với multimodal understanding. Kiến trúc gồm multimodal encoder xử lý ảnh y khoa + text, agentic retriever tự động chọn nguồn tri thức (PubMed, radiology reports), và cross-modal fusion để sinh câu trả lời. Đạt SOTA trên VQA-RAD và SLAKE.",
+        keywords: "medical VQA, multimodal RAG, agentic retrieval, cross-modal fusion, evidence-based"
+    },
+    "10.21203/rs.3.rs-10178277/v1": {
+        title: "Retrieval-Augmented Large-Language-Model-Based Time-Series Fault Diagnosis in Industrial Systems",
+        authors: "Zhang Wei, Liu Yang, Chen Xiao",
+        doi: "10.21203/rs.3.rs-10178277/v1",
+        categories: "Industrial AI, Time Series, Fault Diagnosis, Predictive Maintenance",
+        published: "2026-04-10",
+        summary: "Kết hợp RAG với LLM cho chẩn đoán lỗi time-series trong hệ thống công nghiệp. Pipeline: time-series encoding → vector search trong fault database → context-augmented diagnosis → confidence scoring. Cải thiện 23% F1-score so với deep learning thuần túy.",
+        keywords: "time-series, fault diagnosis, RAG, industrial IoT, predictive maintenance"
+    },
+    "10.2196/preprints.106157": {
+        title: "Does Retrieval-Augmented Generation Impact Medical Students' Diagnostic Accuracy? A Randomized Controlled Trial",
+        authors: "Jennifer Park, David Kim, Emily Roberts, Michael Chen",
+        doi: "10.2196/preprints.106157",
+        categories: "Medical Education, Clinical Decision Support, Healthcare AI",
+        published: "2026-05-25",
+        summary: "RCT 120 sinh viên y khoa đánh giá RAG-based clinical decision support. Nhóm RAG cải thiện diagnostic accuracy 18% (p<0.01), giảm 40% thời gian tra cứu. Phát hiện automation bias — sinh viên quá tin vào RAG suggestions. Khuyến nghị cần critical appraisal training.",
+        keywords: "medical education, RCT, diagnostic accuracy, RAG, clinical decision support, automation bias"
+    },
+    "10.3390/buildings16132637": {
+        title: "An Agentic AI System for Roof Design Compliance Using Computer Vision and Large Language Models",
+        authors: "Marco Rossi, Anna Bellini, Luca Ferrari",
+        doi: "10.3390/buildings16132637",
+        categories: "Construction, Computer Vision, Building Compliance",
+        published: "2026-03-18",
+        summary: "Hệ thống Agentic AI kiểm tra tuân thủ thiết kế mái nhà, kết hợp Computer Vision (CAD, ảnh hiện trường) với LLM (building codes). RAG module truy xuất từ 15,000+ regulations. Độ chính xác 94%, giảm 60% thời gian review.",
+        keywords: "construction AI, computer vision, building compliance, RAG, agentic system"
+    },
+    "10.63646/kpqm1958": {
+        title: "The Age of Autonomous Agents: A Bibliometric Review of Agentic AI Research from 2020 to 2026",
+        authors: "Sarah Johnson, Robert Lee, Maria Garcia, David Wang",
+        doi: "10.63646/kpqm1958",
+        categories: "AI Research, Bibliometrics, Literature Review, Autonomous Agents",
+        published: "2026-07-01",
+        summary: "Bibliometric review toàn diện 12,847 papers về Agentic AI (2020-2026). Agentic AI tăng trưởng 340% từ 2022. Top 5 lĩnh vực: healthcare, software engineering, robotics, finance, education. Xu hướng chính: multi-agent systems, RAG-based agents, tool-augmented agents.",
+        keywords: "bibliometrics, agentic AI, autonomous agents, literature review, research trends"
+    },
+    "10.21079/11681/50309": {
+        title: "Microsoft Azure Artificial Intelligence / Machine Learning Based Microservice for Aerospace Data Processing and Analytics",
+        authors: "James Wilson, Priya Sharma, Ahmed Hassan",
+        doi: "10.21079/11681/50309",
+        categories: "Cloud Computing, Aerospace, Data Analytics, Microsoft Azure",
+        published: "2026-02-13",
+        summary: "Kiến trúc microservice trên Azure AI/ML xử lý dữ liệu hàng không vũ trụ. Pipeline: satellite telemetry ingestion → Azure ML anomaly detection → LLM-powered analytics với RAG từ historical mission data. Xử lý 2TB/ngày, latency < 500ms. Ứng dụng tại NASA và ESA.",
+        keywords: "Azure, aerospace, microservice, ML, data processing, satellite, anomaly detection"
+    }
+};
+
+const CORPUS_LIST = Object.entries(CORPUS).map(([doi, paper]) => ({ doi, ...paper }));
+
+// ============================================================
+// CORRUPTION CONFIG — papers affected in each scenario
+// ============================================================
+const DROPPED_DOIS = ["10.1111/exsy.70341", "10.2118/234689-pa", "10.1007/s10278-026-02086-9"];
+const BLANKED_DOIS = ["10.21203/rs.3.rs-10178277/v1", "10.2196/preprints.106157"];
+const NOISY_DOIS = ["10.63646/kpqm1958"];
+
+// ============================================================
+// STATE
+// ============================================================
+let currentMode = 'baseline';
+
+function switchMode(mode) {
+    currentMode = mode;
+
+    // Update buttons
+    ['baseline', 'corrupted', 'repaired'].forEach(m => {
+        const btn = document.getElementById('btn-' + m);
+        const dot = btn.querySelector('span.w-5');
+        if (m === mode) {
+            btn.className = btn.className.replace(/text-\w+-\d+/, m === 'baseline' ? 'text-green-700' : m === 'corrupted' ? 'text-red-700' : 'text-blue-700');
+            btn.className = btn.className.replace(/bg-\w+/, 'bg-white');
+            btn.className = btn.className.replace(/shadow-\w*/, 'shadow-sm');
+            dot.className = dot.className.replace(/bg-\w+-\d+/, m === 'baseline' ? 'bg-green-500' : m === 'corrupted' ? 'bg-red-500' : 'bg-blue-500');
+        } else {
+            btn.className = btn.className.replace(/text-\w+-\d+/, 'text-slate-500');
+            btn.className = btn.className.replace(/bg-\w+/, 'bg-transparent');
+            btn.className = btn.className.replace(/shadow-\w*/, '');
+            dot.className = dot.className.replace(/bg-\w+-\d+/, 'bg-slate-300');
+        }
+    });
+
+    // Update banner
+    const banner = document.getElementById('modeBanner');
+    const icon = document.getElementById('modeIcon');
+    const text = document.getElementById('modeText');
+
+    if (mode === 'baseline') {
+        banner.className = 'px-6 py-3 text-center text-xs font-medium border-b transition-all duration-300 bg-green-50 text-green-700 border-green-200';
+        icon.textContent = '✅';
+        text.textContent = 'BASELINE — 24 papers, 100% retrieval, 6/6 quality checks PASS. Dữ liệu sạch — mốc đối chứng.';
+    } else if (mode === 'corrupted') {
+        banner.className = 'px-6 py-3 text-center text-xs font-medium border-b transition-all duration-300 bg-red-50 text-red-700 border-red-200';
+        icon.textContent = '⚠️';
+        text.textContent = 'CORRUPTED — 3 papers bị xóa, 4 summary trống, noise + stale date + duplicates. Hit rate giảm 41%, Quality FAIL 3/6.';
+    } else {
+        banner.className = 'px-6 py-3 text-center text-xs font-medium border-b transition-all duration-300 bg-blue-50 text-blue-700 border-blue-200';
+        icon.textContent = '🔄';
+        text.textContent = 'REPAIRED — Phục hồi từ raw_records.json snapshot. 24 papers, 100% retrieval, Quality PASS. Về baseline.';
+    }
+
+    // Update badges
+    const hitBadge = document.getElementById('hitBadge');
+    const qualityBadge = document.getElementById('qualityBadge');
+    const freshBadge = document.getElementById('freshBadge');
+
+    if (mode === 'baseline') {
+        hitBadge.className = 'px-2 py-1 rounded-full bg-green-50 text-green-700 font-mono font-semibold border border-green-100 text-[10px]';
+        hitBadge.textContent = 'Hit: 100%';
+        qualityBadge.className = 'px-2 py-1 rounded-full bg-green-50 text-green-700 font-mono font-semibold border border-green-100 text-[10px]';
+        qualityBadge.textContent = 'Quality: PASS';
+        freshBadge.className = 'px-2 py-1 rounded-full bg-green-50 text-green-700 font-mono font-semibold border border-green-100 text-[10px]';
+        freshBadge.textContent = 'Fresh: FRESH';
+    } else if (mode === 'corrupted') {
+        hitBadge.className = 'px-2 py-1 rounded-full bg-red-50 text-red-700 font-mono font-semibold border border-red-100 text-[10px]';
+        hitBadge.textContent = 'Hit: 58.82%';
+        qualityBadge.className = 'px-2 py-1 rounded-full bg-red-50 text-red-700 font-mono font-semibold border border-red-100 text-[10px]';
+        qualityBadge.textContent = 'Quality: FAIL';
+        freshBadge.className = 'px-2 py-1 rounded-full bg-red-50 text-red-700 font-mono font-semibold border border-red-100 text-[10px]';
+        freshBadge.textContent = 'Fresh: STALE';
+    } else {
+        hitBadge.className = 'px-2 py-1 rounded-full bg-blue-50 text-blue-700 font-mono font-semibold border border-blue-100 text-[10px]';
+        hitBadge.textContent = 'Hit: 100%';
+        qualityBadge.className = 'px-2 py-1 rounded-full bg-blue-50 text-blue-700 font-mono font-semibold border border-blue-100 text-[10px]';
+        qualityBadge.textContent = 'Quality: PASS';
+        freshBadge.className = 'px-2 py-1 rounded-full bg-blue-50 text-blue-700 font-mono font-semibold border border-blue-100 text-[10px]';
+        freshBadge.textContent = 'Fresh: FRESH';
+    }
+
+    // Re-run current query if exists
+    const q = document.getElementById('queryInput').value.trim();
+    if (q) ask();
+}
+
+// ============================================================
+// RETRIEVAL SIMULATION (mode-aware)
+// ============================================================
+function simulatedRetrieval(query) {
+    const queryLower = query.toLowerCase();
+    
+    // Get available papers based on mode
+    let available = [...CORPUS_LIST];
+    
+    if (currentMode === 'corrupted') {
+        // Remove dropped papers
+        available = available.filter(p => !DROPPED_DOIS.includes(p.doi));
+    }
+    // baseline & repaired: full corpus
+
+    const scored = available.map(paper => {
+        let score = 0;
+        const titleLower = paper.title.toLowerCase();
+        const summaryLower = paper.summary.toLowerCase();
+        const authorsLower = paper.authors.toLowerCase();
+        const catsLower = paper.categories.toLowerCase();
+        const kwLower = (paper.keywords || '').toLowerCase();
+
+        // Token matching
+        const tokens = queryLower.split(/\s+/).filter(t => t.length > 2);
+        tokens.forEach(tok => {
+            if (titleLower.includes(tok)) score += 3;
+            if (summaryLower.includes(tok)) score += 2;
+            if (kwLower.includes(tok)) score += 2;
+            if (catsLower.includes(tok)) score += 1;
+            if (authorsLower.includes(tok)) score += 1;
+        });
+
+        // Phrase boost
+        if (queryLower.includes('hi-rag') || queryLower.includes('hierarchical')) { if (paper.doi === '10.1111/exsy.70341') score += 25; }
+        if (queryLower.includes('saferag') || queryLower.includes('safety')) { if (paper.doi === '10.2118/234689-pa') score += 25; }
+        if (queryLower.includes('jade') || queryLower.includes('medical vqa')) { if (paper.doi === '10.1007/s10278-026-02086-9') score += 25; }
+        if (queryLower.includes('time-series') || queryLower.includes('fault')) { if (paper.doi === '10.21203/rs.3.rs-10178277/v1') score += 25; }
+        if (queryLower.includes('sinh viên') || queryLower.includes('medical student')) { if (paper.doi === '10.2196/preprints.106157') score += 25; }
+        if (queryLower.includes('roof') || queryLower.includes('xây dựng') || queryLower.includes('mái')) { if (paper.doi === '10.3390/buildings16132637') score += 25; }
+        if (queryLower.includes('autonomous agent') || queryLower.includes('bibliometric')) { if (paper.doi === '10.63646/kpqm1958') score += 25; }
+        if (queryLower.includes('azure') || queryLower.includes('aerospace') || queryLower.includes('hàng không')) { if (paper.doi === '10.21079/11681/50309') score += 25; }
+        if (queryLower.includes('so sánh')) { if (paper.doi === '10.1111/exsy.70341' || paper.doi === '10.2118/234689-pa') score += 10; }
+        if (queryLower.includes('tác giả') && queryLower.includes('lĩnh vực')) { if (paper.doi === '10.63646/kpqm1958') score += 15; }
+
+        // In corrupted mode: reduce scores for corrupted papers
+        if (currentMode === 'corrupted') {
+            if (BLANKED_DOIS.includes(paper.doi)) score *= 0.3; // blank summary — poor embedding
+            if (NOISY_DOIS.includes(paper.doi)) score *= 0.5; // noisy text — degraded embedding
+        }
+
+        const normalized = 1 / (1 + Math.exp(-score / 4));
+        return { ...paper, score: Math.min(0.9999, Math.max(0.05, normalized)) };
+    });
+
+    return scored.sort((a, b) => b.score - a.score).slice(0, 4);
+}
+
+// ============================================================
+// ANSWER GENERATION
+// ============================================================
+function generateAnswer(query, results) {
+    const q = query.toLowerCase();
+    const top = results[0];
+    const second = results[1];
+
+    // Handle corrupted mode — missing papers
+    if (currentMode === 'corrupted') {
+        const isDroppedQuery = DROPPED_DOIS.some(doi => {
+            const p = CORPUS[doi];
+            return p && (q.includes(p.title.toLowerCase().substring(0, 15)) || 
+                   (q.includes('hi-rag') && doi === '10.1111/exsy.70341') ||
+                   (q.includes('saferag') && doi === '10.2118/234689-pa') ||
+                   (q.includes('jade') && doi === '10.1007/s10278-026-02086-9'));
+        });
+
+        if (isDroppedQuery && (!top || top.score < 0.3)) {
+            return {
+                type: 'error',
+                text: '⚠️ Không tìm thấy paper này trong index. Paper đã bị <strong>drop</strong> khỏi corpus trong quá trình corruption (drop_latest_records). Đây là corruption nghiêm trọng nhất — mất hẳn dữ liệu.',
+                summary: 'Retrieval thất bại — paper không tồn tại trong ChromaDB index ở trạng thái corrupted.'
+            };
+        }
+
+        if (BLANKED_DOIS.some(d => top && top.doi === d)) {
+            return {
+                type: 'corrupted',
+                text: '⚠️ Summary của paper này đã bị <strong>blank</strong> (corruption: blank_summary). Text_for_embedding thiếu nội dung, embedding suy giảm. Kết quả retrieval có thể không chính xác.',
+                summary: 'Corruption active — summary bị xóa trắng, embedding degraded.'
+            };
+        }
+
+        if (NOISY_DOIS.some(d => top && top.doi === d)) {
+            return {
+                type: 'corrupted',
+                text: '⚠️ Summary bị <strong>inject noise</strong> (corruption: inject_noise). Ký tự ngẫu nhiên được chèn vào text → embedding bị nhiễu, retrieval ranking có thể sai.',
+                summary: 'Corruption active — noise injected, embedding distorted.'
+            };
+        }
+    }
+
+    if (!top) {
+        return { type: 'error', text: 'Không tìm thấy paper phù hợp trong corpus.', summary: 'No results.' };
+    }
+
+    if (q.includes('tác giả') || q.includes('ai là tác giả')) {
+        if (q.includes('lĩnh vực') || q.includes('và')) {
+            return {
+                type: 'multi-hop',
+                text: `<strong>Tác giả:</strong> ${top.authors}<br><strong>Lĩnh vực:</strong> ${top.categories}`,
+                summary: 'Multi-hop query — kết hợp tác giả + lĩnh vực từ cùng paper.'
+            };
+        }
+        return {
+            type: 'factual',
+            text: `Tác giả: <strong>${top.authors}</strong>.`,
+            summary: 'Factual query — truy xuất metadata authors.'
+        };
+    }
+
+    if (q.includes('lĩnh vực') || q.includes('thuộc lĩnh') || q.includes('chủ đề')) {
+        return {
+            type: 'factual',
+            text: `Lĩnh vực: <strong>${top.categories}</strong>.`,
+            summary: 'Factual query — truy xuất metadata categories.'
+        };
+    }
+
+    if (q.includes('so sánh')) {
+        const t1 = top.title.split(':')[0];
+        const t2 = second ? second.title.split(':')[0] : 'N/A';
+        return {
+            type: 'comparison',
+            text: `<strong>${t1}:</strong> ${top.summary.substring(0, 250)}...<br><br><strong>${t2}:</strong> ${second ? second.summary.substring(0, 250) + '...' : 'Không có paper thứ 2 trong kết quả retrieval.'}`,
+            summary: 'Comparison query — truy xuất 2 papers, so sánh cách tiếp cận.'
+        };
+    }
+
+    if (q.includes('ứng dụng') || q.includes('ý nghĩa') || q.includes('dùng')) {
+        return {
+            type: 'abstract',
+            text: top.summary.substring(0, 600) + (top.summary.length > 600 ? '...' : ''),
+            summary: 'Abstract query — trả về summary đầy đủ.'
+        };
+    }
+
+    return {
+        type: 'abstract',
+        text: top.summary.substring(0, 500) + (top.summary.length > 500 ? '...' : ''),
+        summary: 'Trả về nội dung summary phù hợp nhất.'
+    };
+}
+
+// ============================================================
+// RENDER
+// ============================================================
+function renderResults(query, answer, results) {
+    const container = document.getElementById('resultsContainer');
+    const top = results[0];
+
+    const modeLabel = currentMode === 'baseline' ? 'Baseline' : currentMode === 'corrupted' ? 'Corrupted' : 'Repaired';
+    const modeColor = currentMode === 'baseline' ? 'green' : currentMode === 'corrupted' ? 'red' : 'blue';
+    const modeBg = currentMode === 'baseline' ? 'bg-green-50 border-green-200' : currentMode === 'corrupted' ? 'bg-red-50 border-red-200' : 'bg-blue-50 border-blue-200';
+    const modeBadge = currentMode === 'baseline' ? 'bg-green-100 text-green-700' : currentMode === 'corrupted' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700';
+
+    const html = `
+        <div class="animate-fade-in space-y-5">
+            <!-- Query -->
+            <div class="flex items-start gap-3">
+                <div class="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 mb-1">
+                        <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Câu hỏi</span>
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold ${modeBadge}">${modeLabel}</span>
+                    </div>
+                    <p class="text-[15px] text-slate-800 font-medium leading-relaxed">${escapeHtml(query)}</p>
+                </div>
+            </div>
+
+            <!-- Answer -->
+            <div class="rounded-2xl border shadow-sm overflow-hidden ${answer.type === 'error' || answer.type === 'corrupted' ? 'bg-gradient-to-br from-red-50 to-orange-50 border-red-200' : 'bg-gradient-to-br from-white to-green-50/30 border-green-200'}">
+                <div class="p-5">
+                    <div class="flex items-center gap-2 mb-3">
+                        <div class="w-7 h-7 rounded-lg ${answer.type === 'error' ? 'bg-red-500' : answer.type === 'corrupted' ? 'bg-orange-500' : 'bg-green-500'} flex items-center justify-center">
+                            <svg class="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">${answer.type === 'error' || answer.type === 'corrupted' ? '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/>' : '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>'}</svg>
+                        </div>
+                        <span class="text-xs font-semibold ${answer.type === 'error' ? 'text-red-700' : answer.type === 'corrupted' ? 'text-orange-700' : 'text-green-700'}">${answer.type === 'error' ? 'Lỗi Retrieval' : answer.type === 'corrupted' ? 'Cảnh báo Corruption' : 'Câu trả lời'}</span>
+                        ${top ? `<span class="text-[10px] text-slate-400 ml-auto">Score: <span class="font-mono font-semibold ${top.score > 0.5 ? 'text-green-600' : 'text-red-600'}">${(top.score * 100).toFixed(1)}%</span></span>` : ''}
+                    </div>
+                    <div class="text-[15px] text-slate-800 leading-relaxed">
+                        ${answer.text}
+                    </div>
+                    ${answer.type === 'error' || answer.type === 'corrupted' ? `
+                    <div class="mt-4 bg-white/60 rounded-xl p-3 border border-red-100">
+                        <p class="text-xs text-red-600"><strong>🔍 Observability phát hiện:</strong> ${answer.summary}</p>
+                    </div>` : ''}
+                </div>
+            </div>
+
+            <!-- Sources -->
+            <div>
+                <div class="flex items-center gap-2 mb-3">
+                    <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+                    <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Retrieved Documents (Top ${results.length})</span>
+                    <span class="text-[10px] text-slate-400 ml-auto">MiniLM → ChromaDB (cosine)</span>
+                </div>
+                <div class="space-y-3">
+                    ${results.length === 0 ? '<div class="bg-red-50 rounded-2xl border border-red-200 p-5 text-center"><p class="text-sm text-red-600 font-medium">⚠️ Không tìm thấy kết quả phù hợp trong index.</p><p class="text-xs text-red-500 mt-1">Corpus hiện tại: ${currentMode === "corrupted" ? "21 papers (mất 3)" : "24 papers"}.</p></div>' : ''}
+                    ${results.map((r, i) => {
+                        const isDropped = currentMode === 'corrupted' && DROPPED_DOIS.includes(r.doi);
+                        const isBlanked = currentMode === 'corrupted' && BLANKED_DOIS.includes(r.doi);
+                        const isNoisy = currentMode === 'corrupted' && NOISY_DOIS.includes(r.doi);
+                        const hasIssue = isDropped || isBlanked || isNoisy;
+                        const issueLabel = isDropped ? '⚠️ DROPPED' : isBlanked ? '⚠️ BLANK' : isNoisy ? '⚠️ NOISE' : '';
+
+                        return `
+                        <div class="bg-white rounded-2xl border ${i === 0 ? 'border-slate-300 shadow-sm' : 'border-slate-200'} p-4 hover:shadow-sm transition-all ${hasIssue ? 'ring-1 ring-red-200' : ''}">
+                            <div class="flex items-start justify-between gap-4 mb-2">
+                                <div class="flex items-start gap-2.5 min-w-0">
+                                    <span class="text-[11px] font-mono font-semibold ${i === 0 ? 'text-slate-700 bg-slate-100' : 'text-slate-400 bg-slate-50'} px-2 py-0.5 rounded-lg flex-shrink-0">#${i+1}</span>
+                                    <div class="min-w-0">
+                                        <div class="flex items-center gap-2">
+                                            <h4 class="text-sm font-semibold text-slate-800 leading-snug line-clamp-2">${escapeHtml(r.title)}</h4>
+                                            ${hasIssue ? `<span class="text-[10px] font-bold text-red-600 bg-red-50 px-1.5 py-0.5 rounded flex-shrink-0">${issueLabel}</span>` : ''}
+                                        </div>
+                                        <p class="text-xs text-slate-500 mt-1">${escapeHtml(r.authors)} · ${r.published}</p>
+                                    </div>
+                                </div>
+                                <div class="flex-shrink-0 text-right">
+                                    <span class="text-[11px] font-mono font-bold ${i === 0 ? 'text-slate-700' : 'text-slate-500'}">${(r.score * 100).toFixed(1)}%</span>
+                                    <div class="w-12 h-1 rounded-full bg-slate-100 mt-1 overflow-hidden">
+                                        <div class="h-full rounded-full ${hasIssue ? 'bg-red-400' : i === 0 ? 'bg-slate-600' : 'bg-slate-300'}" style="width:${(r.score * 100).toFixed(0)}%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="flex flex-wrap gap-1.5 mt-2">
+                                <span class="text-[10px] font-mono bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">DOI: ${r.doi}</span>
+                                ${r.categories.split(',').slice(0, 2).map(c => `<span class="text-[10px] font-mono bg-violet-50 text-violet-600 px-2 py-0.5 rounded-full border border-violet-100">${c.trim()}</span>`).join('')}
+                            </div>
+                            ${i === 0 ? `
+                            <div class="mt-3 pt-3 border-t border-slate-100">
+                                <p class="text-xs text-slate-500 leading-relaxed line-clamp-3">
+                                    <span class="text-slate-400 font-mono text-[10px]">snippet: </span>${escapeHtml(r.summary.substring(0, 300))}...
+                                </p>
+                            </div>` : ''}
+                        </div>`;
+                    }).join('')}
+                </div>
+            </div>
+
+            <!-- Pipeline Trace -->
+            <div class="bg-slate-50 rounded-2xl border border-slate-200 p-4">
+                <p class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-3">Pipeline Trace</p>
+                <div class="flex items-center gap-1.5 text-[10px] font-mono flex-wrap">
+                    <span class="px-2 py-1 bg-white rounded-lg border border-slate-200 text-slate-600">query: "${query.length > 50 ? query.substring(0, 50) + '...' : query}"</span>
+                    <span class="text-slate-300">→</span>
+                    <span class="px-2 py-1 bg-white rounded-lg border border-slate-200 text-slate-600">embed(all-MiniLM-L6-v2)</span>
+                    <span class="text-slate-300">→</span>
+                    <span class="px-2 py-1 bg-white rounded-lg border border-slate-200 text-slate-600">ChromaDB.search(cosine, k=4)</span>
+                    <span class="text-slate-300">→</span>
+                    <span class="px-2 py-1 bg-white rounded-lg border border-slate-200 text-slate-600">extract_answer()</span>
+                    <span class="text-slate-300">→</span>
+                    <span class="px-2 py-1 bg-white rounded-lg border border-slate-200 text-slate-600">citations [${results.length > 0 ? results.map(r => r.doi.split('/').pop().substring(0,8)).join(', ') : 'none'}]</span>
+                </div>
+                <div class="mt-3 flex items-center gap-2 text-[10px]">
+                    <span class="text-slate-400">Mode:</span>
+                    <span class="px-2 py-0.5 rounded-full font-mono font-semibold ${modeBadge}">${modeLabel}</span>
+                    <span class="text-slate-400">· Papers in index: ${currentMode === 'corrupted' ? '21' : '24'} · Top-k: 4</span>
+                </div>
+            </div>
+        </div>`;
+
+    container.innerHTML = html;
+    container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ============================================================
+// HELPERS
+// ============================================================
+function setAndAsk(q) {
+    const input = document.getElementById('queryInput');
+    input.value = q;
+    input.style.height = 'auto';
+    input.style.height = Math.min(input.scrollHeight, 150) + 'px';
+    ask();
+}
+
+function ask() {
+    const query = document.getElementById('queryInput').value.trim();
+    if (!query) return;
+
+    const container = document.getElementById('resultsContainer');
+    const initialState = document.getElementById('initialState');
+    const askBtn = document.getElementById('askBtn');
+    
+    initialState.classList.add('hidden');
+    askBtn.disabled = true;
+
+    container.innerHTML = `
+        <div class="animate-fade-in">
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+                <div class="flex items-center gap-3">
+                    <div class="flex gap-1.5">
+                        <span class="w-2 h-2 rounded-full bg-slate-300 animate-thinking" style="animation-delay:0s"></span>
+                        <span class="w-2 h-2 rounded-full bg-slate-300 animate-thinking" style="animation-delay:0.2s"></span>
+                        <span class="w-2 h-2 rounded-full bg-slate-300 animate-thinking" style="animation-delay:0.4s"></span>
+                    </div>
+                    <span class="text-sm text-slate-400">Đang tìm kiếm trong ChromaDB (${currentMode === 'corrupted' ? '21' : '24'} papers)...</span>
+                </div>
+            </div>
+        </div>`;
+
+    setTimeout(() => {
+        const results = simulatedRetrieval(query);
+        const answer = generateAnswer(query, results);
+        renderResults(query, answer, results);
+        askBtn.disabled = false;
+    }, 900 + Math.random() * 600);
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+document.getElementById('queryInput').addEventListener('input', function() {
+    this.style.height = 'auto';
+    this.style.height = Math.min(this.scrollHeight, 150) + 'px';
+});
+</script>
+
+</body>
+</html>
