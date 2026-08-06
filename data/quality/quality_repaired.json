@@ -1,0 +1,47 @@
+{
+  "report_name": "repaired",
+  "timestamp": "2026-08-06 15:38:41.422176",
+  "total_checks": 6,
+  "passed_checks": 6,
+  "failed_checks": 0,
+  "all_passed": true,
+  "checks": [
+    {
+      "check": "row_count",
+      "passed": true,
+      "value": 24,
+      "message": "Dataset has 24 rows."
+    },
+    {
+      "check": "paper_id_not_null",
+      "passed": true,
+      "value": 0,
+      "message": "No null paper_id."
+    },
+    {
+      "check": "paper_id_unique",
+      "passed": true,
+      "value": 0,
+      "message": "All paper_id are unique."
+    },
+    {
+      "check": "title_not_empty",
+      "passed": true,
+      "value": 0,
+      "message": "All titles are present."
+    },
+    {
+      "check": "summary_min_length",
+      "passed": true,
+      "value": 0,
+      "message": "All summaries have reasonable length."
+    },
+    {
+      "check": "freshness",
+      "passed": true,
+      "value": 0,
+      "threshold_days": 180,
+      "message": "All records are fresh."
+    }
+  ]
+}

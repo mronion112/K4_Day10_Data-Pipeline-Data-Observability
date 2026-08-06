@@ -1,0 +1,47 @@
+{
+  "report_name": "corrupted",
+  "timestamp": "2026-08-06 15:38:13.971390",
+  "total_checks": 6,
+  "passed_checks": 3,
+  "failed_checks": 3,
+  "all_passed": false,
+  "checks": [
+    {
+      "check": "row_count",
+      "passed": true,
+      "value": 23,
+      "message": "Dataset has 23 rows."
+    },
+    {
+      "check": "paper_id_not_null",
+      "passed": true,
+      "value": 0,
+      "message": "No null paper_id."
+    },
+    {
+      "check": "paper_id_unique",
+      "passed": false,
+      "value": 2,
+      "message": "2 duplicate paper_id(s)."
+    },
+    {
+      "check": "title_not_empty",
+      "passed": true,
+      "value": 0,
+      "message": "All titles are present."
+    },
+    {
+      "check": "summary_min_length",
+      "passed": false,
+      "value": 5,
+      "message": "5 summaries < 50 chars."
+    },
+    {
+      "check": "freshness",
+      "passed": false,
+      "value": 3,
+      "threshold_days": 180,
+      "message": "3 stale records (> 180 days old)."
+    }
+  ]
+}

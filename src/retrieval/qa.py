@@ -20,12 +20,41 @@ class AnswerResult:
 def _extract_answer(question: str, top_result: SearchResult) -> str:
     lowered = question.lower()
     metadata = top_result.metadata
-    if "who authored" in lowered or "list the authors" in lowered:
+
+    # Tien hanh va Anh de hoi ve tac gia
+    author_keywords = [
+        "who authored", "list the authors", "who wrote",
+        "tác giả", "ai là tác giả", "tac gia",
+    ]
+    if any(kw in lowered for kw in author_keywords):
         return metadata["authors_joined"]
-    if "when was" in lowered or "publication date" in lowered or "published on" in lowered:
+
+    # Hoi ve ngay xuat ban
+    date_keywords = [
+        "when was", "publication date", "published on",
+        "xuất bản", "xuat ban", "ngày nào",
+    ]
+    if any(kw in lowered for kw in date_keywords):
         return metadata["published"]
-    if "what categories" in lowered:
+
+    # Hoi ve linh vuc / categories
+    cat_keywords = [
+        "what categories", "lĩnh vực", "linh vuc", "thuộc lĩnh",
+        "thuoc linh", "chủ đề", "chu de",
+    ]
+    if any(kw in lowered for kw in cat_keywords):
         return metadata["categories_joined"]
+
+    # Hoi ve y nghia/ung dung -> tra ve tom tat summary
+    abstract_keywords = [
+        "ý nghĩa", "y nghia", "ứng dụng", "ung dung",
+        "tóm tắt", "tom tat", "nội dung chính", "noi dung chinh",
+        "so sánh", "so sanh",
+    ]
+    if any(kw in lowered for kw in abstract_keywords):
+        return metadata["summary"]
+
+    # Mac dinh: tra ve first sentence cua summary
     return first_sentence(metadata["summary"])
 
 
