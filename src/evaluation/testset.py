@@ -1,124 +1,69 @@
 from __future__ import annotations
 
+import json
+import logging
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
 
-from core.utils import ensure_parent, write_json
+from core.utils import ensure_parent, first_sentence
+
+logger = logging.getLogger(__name__)
 
 
-def build_test_set(df: pd.DataFrame, output_path) -> list[dict[str, Any]]:
-    """TODO(student): tao bo evaluation set tu cleaned dataframe.
+def build_test_set(df: pd.DataFrame, output_path: Path) -> list[dict[str, Any]]:
+    """Tạo bộ câu hỏi đánh giá (evaluation set) từ DataFrame đã làm sạch."""
+    if len(df) < 5:
+        raise ValueError("Cần ít nhất 5 bài báo trong dữ liệu sạch để tạo bộ test.")
+    required_columns = {"paper_id", "title", "authors_joined", "published", "summary"}
+    missing_columns = sorted(required_columns.difference(df.columns))
+    if missing_columns:
+        raise ValueError(f"Dữ liệu sạch thiếu các cột bắt buộc: {', '.join(missing_columns)}")
 
-    Pseudo-code:
-    1. Kiem tra so luong document toi thieu.
-    2. Chon mot so paper dai dien.
-    3. Tao nhieu loai cau hoi:
-       - factual (single-hop specific): tac gia, ngay, linh vuc
-       - abstract (single-hop abstract): y nghia, ung dung
-       - comparison (multi-doc): so sanh 2 paper
-       - multi-hop (multi-step): ket hop nhieu thong tin
-    4. Moi row can co:
-       - id
-       - question_type
-       - question
-       - ground_truth
-       - ground_truth_doc_ids
-    5. Ghi file JSON vao output_path.
-    """
-    # Phai co it nhat 5 paper de tao test set
-    min_docs = 5
-    if len(df) < min_docs:
-        raise RuntimeError(
-            f"Can it nhat {min_docs} documents de tao test set, hien co {len(df)}."
-        )
+    # Lấy mẫu 5 bài báo để tạo câu hỏi
+    sample_df = df.sample(n=min(5, len(df)), random_state=42)
+    test_set = []
+    question_id_counter = 1
 
-    # Chon toi da 10 paper dau tien lam mau, reset index de duyet de dang
-    sample = df.head(min_docs + 5).reset_index(drop=True)
+    for _, row in sample_df.iterrows():
+        paper_id = row["paper_id"]
+        title = row["title"]
 
-    test_set: list[dict[str, Any]] = []
-    idx = 0
-
-    for _, row in sample.iterrows():
-        paper_id = str(row["paper_id"])
-        title = str(row["title"])
-
-        # Bo qua paper thieu du lieu can thiet
-        if not row.get("authors_joined") or not str(row["authors_joined"]).strip():
-            continue
-
-        # --- 1. factual: hoi truc tiep ve tac gia ---
+        # Câu hỏi về tác giả
         test_set.append({
-            "id": f"q{idx + 1}",
-            "question_type": "factual",
-            "question": f"Tác giả của bài báo '{title}' là ai?",
-            "ground_truth": str(row["authors_joined"]),
+            "id": f"q{question_id_counter}",
+            "question_type": "authors",
+            "question": f"Who are the authors of the paper titled '{title}'?",
+            "ground_truth": row["authors_joined"],
             "ground_truth_doc_ids": [paper_id],
         })
-        idx += 1
+        question_id_counter += 1
 
-        # --- 2. factual: hoi ve linh vuc ---
-        if row.get("categories_joined") and str(row["categories_joined"]).strip():
-            test_set.append({
-                "id": f"q{idx + 1}",
-                "question_type": "factual",
-                "question": f"Bài báo '{title}' thuộc lĩnh vực nào?",
-                "ground_truth": str(row["categories_joined"]),
-                "ground_truth_doc_ids": [paper_id],
-            })
-            idx += 1
-
-        # --- 3. abstract: hoi ve y nghia/ung dung cua nghien cuu ---
-        if row.get("summary") and str(row["summary"]).strip():
-            test_set.append({
-                "id": f"q{idx + 1}",
-                "question_type": "abstract",
-                "question": f"Ý nghĩa và ứng dụng chính của nghiên cứu trong bài báo '{title}' là gì?",
-                "ground_truth": str(row["summary"]),
-                "ground_truth_doc_ids": [paper_id],
-            })
-            idx += 1
-
-        # Gioi han moi paper 3 cau hoi, toi da ~15 cau
-        if len(test_set) >= 15:
-            break
-
-    # --- 4. comparison: so sanh 2 paper (can it nhat 2 paper) ---
-    if len(sample) >= 2:
-        r1 = sample.iloc[0]
-        r2 = sample.iloc[1]
-        ground_truth = (
-            f"Bài '{r1['title']}' tập trung vào: {str(r1['summary'])[:200]}. "
-            f"Bài '{r2['title']}' tập trung vào: {str(r2['summary'])[:200]}."
-        )
+        # Câu hỏi về ngày xuất bản
         test_set.append({
-            "id": f"q{len(test_set) + 1}",
-            "question_type": "comparison",
-            "question": f"So sánh cách tiếp cận giữa bài báo '{r1['title']}' và '{r2['title']}'?",
-            "ground_truth": ground_truth,
-            "ground_truth_doc_ids": [str(r1["paper_id"]), str(r2["paper_id"])],
+            "id": f"q{question_id_counter}",
+            "question_type": "published_date",
+            "question": f"When was the paper '{title}' published?",
+            "ground_truth": row["published"],
+            "ground_truth_doc_ids": [paper_id],
         })
+        question_id_counter += 1
 
-    # --- 5. multi-hop: ket hop nhieu thong tin tu cung 1 paper ---
-    if len(sample) >= 1:
-        r = sample.iloc[0]
-        if r.get("authors_joined") and r.get("categories_joined"):
-            ground_truth = (
-                f"Tác giả: {str(r['authors_joined'])}. Lĩnh vực: {str(r['categories_joined'])}."
-            )
-            test_set.append({
-                "id": f"q{len(test_set) + 1}",
-                "question_type": "multi-hop",
-                "question": (
-                    f"Ai là tác giả của bài báo '{r['title']}' "
-                    f"và nghiên cứu này thuộc lĩnh vực nào?"
-                ),
-                "ground_truth": ground_truth,
-                "ground_truth_doc_ids": [str(r["paper_id"])],
-            })
+        # Câu hỏi về tóm tắt
+        test_set.append({
+            "id": f"q{question_id_counter}",
+            "question_type": "summary",
+            "question": f"What is the main topic of the paper titled '{title}'?",
+            "ground_truth": first_sentence(row["summary"]),
+            "ground_truth_doc_ids": [paper_id],
+        })
+        question_id_counter += 1
 
-    # Ghi test set ra file JSON
+    # Lưu bộ câu hỏi vào file JSON
     ensure_parent(output_path)
-    write_json(output_path, test_set)
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(test_set, f, indent=2, ensure_ascii=False)
 
+    logger.info(f"Đã tạo và lưu {len(test_set)} câu hỏi vào {output_path}")
     return test_set
