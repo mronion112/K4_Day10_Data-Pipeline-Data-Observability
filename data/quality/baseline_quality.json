@@ -1,0 +1,43 @@
+{
+  "report_name": "baseline_quality",
+  "row_count": 24,
+  "passed": true,
+  "checks": [
+    {
+      "name": "row_count",
+      "passed": true,
+      "actual": 24,
+      "expectation": "> 0"
+    },
+    {
+      "name": "paper_id_not_null",
+      "passed": true,
+      "actual": 24,
+      "expectation": "all rows"
+    },
+    {
+      "name": "paper_id_unique",
+      "passed": true,
+      "actual": 0,
+      "expectation": "0 duplicates"
+    },
+    {
+      "name": "title_not_blank",
+      "passed": true,
+      "actual": 0,
+      "expectation": "0 blank titles"
+    },
+    {
+      "name": "summary_minimum_length",
+      "passed": true,
+      "actual": 0,
+      "expectation": "0 summaries shorter than 100 chars"
+    },
+    {
+      "name": "freshness",
+      "passed": true,
+      "actual": 0,
+      "expectation": "no rows older than 180 days"
+    }
+  ]
+}

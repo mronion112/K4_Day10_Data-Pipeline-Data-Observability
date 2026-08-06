@@ -5,3 +5,6 @@ lab.txt
 src/*.egg-info/
 lab/
 **/__pycache__/
+# ChromaDB is rebuilt from the committed clean-data and embedding manifests.
+data/chroma/*
+!data/chroma/.gitkeep

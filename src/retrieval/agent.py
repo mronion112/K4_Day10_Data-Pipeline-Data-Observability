@@ -20,6 +20,9 @@ def build_agent(settings: Settings, index: LocalEmbeddingIndex):
             lines.append(
                 f"paper_id: {result.paper_id}\n"
                 f"title: {result.title}\n"
+                f"published: {result.metadata.get('published', 'unknown')}\n"
+                f"authors: {result.metadata.get('authors_joined', 'unknown')}\n"
+                f"categories: {result.metadata.get('categories_joined', 'unknown')}\n"
                 f"score: {result.score:.4f}\n"
                 f"{result.content}"
             )
@@ -34,6 +37,9 @@ def build_agent(settings: Settings, index: LocalEmbeddingIndex):
         return (
             f"paper_id: {record['paper_id']}\n"
             f"title: {record['title']}\n"
+            f"published: {record['metadata'].get('published', 'unknown')}\n"
+            f"authors: {record['metadata'].get('authors_joined', 'unknown')}\n"
+            f"categories: {record['metadata'].get('categories_joined', 'unknown')}\n"
             f"{record['content']}"
         )
 
@@ -43,7 +49,7 @@ def build_agent(settings: Settings, index: LocalEmbeddingIndex):
         tools=[semantic_search_papers, lookup_paper],
         system_prompt=(
             "You answer questions about the indexed scholarly paper corpus sourced from Crossref. "
-            "Use tools before answering factual questions. "
+            "Use tools before answering factual questions. State exact metadata values (especially dates) from tool output; do not infer or replace them. "
             "If the indexed corpus does not support the answer, say so clearly."
         ),
         name="paper_corpus_agent",

@@ -19,11 +19,13 @@ def build_llm(settings: Settings, temperature: float = 0.0):
             temperature=temperature,
         )
     if provider == "openai":
-        return ChatOpenAI(
-            model=settings.model_name,
-            api_key=settings.openai_api_key,
-            temperature=temperature,
-        )
+        # LangChain's agent uses function tools through Chat Completions.
+        # GPT-5.6 permits that route only with reasoning disabled; retain the
+        # provider's defaults for earlier OpenAI models.
+        options = {}
+        if settings.model_name.startswith("gpt-5.6"):
+            options["reasoning_effort"] = "none"
+        return ChatOpenAI(model=settings.model_name, api_key=settings.openai_api_key, temperature=temperature, **options)
     if provider == "anthropic":
         return ChatAnthropic(
             model=settings.model_name,

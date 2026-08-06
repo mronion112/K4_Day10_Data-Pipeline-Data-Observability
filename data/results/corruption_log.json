@@ -1,0 +1,31 @@
+{
+  "original_rows": 24,
+  "corrupted_rows": 25,
+  "events": [
+    {
+      "scenario": "blank_summary",
+      "paper_id": "10.1111/exsy.70341"
+    },
+    {
+      "scenario": "blank_summary",
+      "paper_id": "10.2118/234689-pa"
+    },
+    {
+      "scenario": "blank_summary",
+      "paper_id": "10.1007/s10278-026-02086-9"
+    },
+    {
+      "scenario": "stale_date",
+      "paper_id": "10.1007/s10278-026-02086-9",
+      "published": "2000-01-01"
+    },
+    {
+      "scenario": "embedding_noise",
+      "paper_id": "10.1111/exsy.70341"
+    },
+    {
+      "scenario": "duplicate_paper_id",
+      "paper_id": "10.2118/234689-pa"
+    }
+  ]
+}

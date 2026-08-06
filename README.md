@@ -108,12 +108,12 @@ macOS/Linux:
 cp .env.example .env
 ```
 
-Mặc định project dùng Gemini:
+Mẫu `.env.example` dùng OpenAI:
 
 ```dotenv
-LLM_PROVIDER=gemini
-LLM_MODEL=gemini-2.5-flash
-GOOGLE_API_KEY=your_key_here
+LLM_PROVIDER=openai
+LLM_MODEL=gpt-5.6-luna
+OPENAI_API_KEY=your_key_here
 ```
 
 Project cũng hỗ trợ `openai`, `anthropic`, `openrouter`, `ollama` và OpenAI-compatible custom endpoint. Chỉ điền credential của provider bạn sử dụng.
@@ -197,6 +197,24 @@ Nếu dùng pip:
 ```bash
 python script/run_corruption_flow.py
 ```
+
+### Demo agent dùng LLM thật
+
+Baseline metrics có thể chạy với heuristic fallback khi chưa cấu hình LLM. Để demo agent thật, tạo `.env` từ `.env.example`, chọn một provider và điền key **chỉ trên máy local**. Ví dụ OpenAI:
+
+```dotenv
+LLM_PROVIDER=openai
+LLM_MODEL=gpt-5.6-luna
+OPENAI_API_KEY=your_key_here
+```
+
+Sau khi đã chạy baseline, gọi ba câu hỏi factual từ frozen test set:
+
+```bash
+uv run python script/run_agent_demo.py
+```
+
+Kết quả console và artifact `data/results/agent_demo_answers.json` là bằng chứng cho phần demo. Không commit `.env` hoặc API key.
 
 ## 6. Kiểm tra kết quả
 
