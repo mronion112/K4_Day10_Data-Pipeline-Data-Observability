@@ -6,12 +6,12 @@
 
 | Thông tin         | Nội dung                                                         |
 | ------------------ | ----------------------------------------------------------------- |
-| Họ và tên       | [Họ và tên]                                                    |
-| MSSV               | [MSSV]                                                            |
-| Khóa/Lớp         | [K4]                                                              |
+| Họ và tên       | Trần Quang Minh                                                |
+| MSSV               | 01210                                                            |
+| Khóa/Lớp         | K4                                                               |
 | Tên nhóm         | [Tên nhóm]                                                      |
 | Vai trò chính    | Observability Owner — Data Quality & Reporting                    |
-| Repository         | [Đường dẫn repository]                                          |
+| Repository         | https://github.com/mronion112/K4_Day10_Data-Pipeline-Data-Observability |
 | Ngày hoàn thành | 2026-08-06                                                        |
 
 ## 2. Vai trò và phạm vi công việc
@@ -200,5 +200,5 @@ Cách đo: so sánh số lượng expectation tự động detect được vs ma
 - [x] Báo cáo không chứa `.env`, API key, token hoặc secret.
 - [x] Báo cáo này không phải bản sao nguyên văn của báo cáo nhóm hoặc báo cáo thành viên khác.
 
-**Họ và tên:** [Họ và tên]
+**Họ và tên:** Trần Quang Minh
 **Ngày xác nhận:** 2026-08-06
